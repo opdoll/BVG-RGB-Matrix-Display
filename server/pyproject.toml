@@ -1,0 +1,6 @@
+[tool.fastapi]
+entrypoint = "main:app"
+
+dependencies = [
+    "fastapi[standard]"
+]

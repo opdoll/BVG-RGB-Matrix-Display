@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
 #include <WiFi.h>
+
+#include "api_client.h"
 #include "secrets.h"
 
 #define PANEL_RES_X 64
@@ -67,19 +69,32 @@ void setup()
 
   display->setBrightness8(100);
   display->clearScreen();
-  display->setTextWrap(false);
-  display->setTextSize(3);
+  display->setTextSize(1);
 
   display->setTextColor(BVGColor);
-  display->setCursor(2, 2);
-  display->print("BVG");
+  display->setCursor(4, 4);
+  display->print("Waiting for api!");
 
 
   Serial.println("Display initialized successfully.");
 }
 
+String currentMessage;
+
 void loop()
 {
-  Serial.println("Display is running.");
+  String newMessage;
+
+  if (fetchMessage(newMessage) && newMessage != currentMessage) {
+    currentMessage = newMessage;
+
+    Serial.print("Updating display text to: ");
+    Serial.println(currentMessage);
+
+    display->clearScreen();
+    display->setCursor(4, 4);
+    display->print(currentMessage);
+  }
+
   delay(5000);
 }
