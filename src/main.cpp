@@ -92,7 +92,7 @@ void loop()
     Serial.println(currentMessage);
 
     display->clearScreen();
-    display->setCursor(4, 4);
+    display->setCursor(2, 2);
     display->print(currentMessage);
   }
 
