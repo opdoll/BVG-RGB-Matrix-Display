@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
+#include <WiFi.h>
+#include "secrets.h"
 
 #define PANEL_RES_X 64
 #define PANEL_RES_Y 32
@@ -12,11 +14,30 @@ void setup()
   delay(1000);
   Serial.begin(115200);
 
-  const uint32_t psramBytes = ESP.getPsramSize();
-  Serial.printf("Chip: %s\n", ESP.getChipModel());
-  Serial.printf("Flash: %u MB\n", ESP.getFlashChipSize() / (1024 * 1024));
-  Serial.printf("Usable PSRAM: %.2f MiB (%u bytes)\n", psramBytes / (1024.0 * 1024.0), psramBytes);
+  // wifi setup
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
+  Serial.print("Connecting to WiFi");
+
+  for (int attempt = 0;
+       attempt < 40 && WiFi.status() != WL_CONNECTED;
+       ++attempt) {
+    delay(500);
+    Serial.print(".");
+       }
+
+  Serial.println();
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print("WiFi connected. IP address: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("WiFi connection failed");
+  }
+
+  // adapt to pin layout of rgb matrix
   HUB75_I2S_CFG::i2s_pins pins = {
     4, 6, 5,
     7, 16, 15,
