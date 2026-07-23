@@ -1,6 +1,9 @@
-[tool.fastapi]
-entrypoint = "main:app"
-
+[project]
+name = "bvg-rgb-matrix-display"
+version = "0.1.0"
 dependencies = [
     "fastapi[standard]"
 ]
+
+[tool.fastapi]
+entrypoint = "main:app"
