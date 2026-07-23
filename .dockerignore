@@ -1,0 +1,6 @@
+.git
+.pio
+.idea
+__pycache__
+*.pyc
+RGB-Matrix-Test.ino
