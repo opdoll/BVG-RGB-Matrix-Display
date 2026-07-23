@@ -3,6 +3,7 @@
 #include <WiFi.h>
 
 #include "api_client.h"
+#include "font_3x5.h"
 #include "secrets.h"
 
 #define PANEL_RES_X 64
@@ -10,6 +11,71 @@
 #define PANEL_CHAIN 2
 
 MatrixPanel_I2S_DMA *display = nullptr;
+
+uint16_t textWidth(const String &text)
+{
+  int16_t x;
+  int16_t y;
+  uint16_t width;
+  uint16_t height;
+  display->getTextBounds(text, 0, 0, &x, &y, &width, &height);
+  return width;
+}
+
+String fitToWidth(String text, uint16_t maxWidth)
+{
+  while (!text.isEmpty() && textWidth(text) > maxWidth) {
+    text.remove(text.length() - 1);
+  }
+
+  return text;
+}
+
+String normalizeText(String text) // use replacement chars for now
+{
+  text.replace("ä", "{");
+  text.replace("Ä", "{");
+  text.replace("ö", "|");
+  text.replace("Ö", "|");
+  text.replace("ü", "}");
+  text.replace("Ü", "}");
+  text.replace("ß", "SS");
+  text.toUpperCase();
+  return text;
+}
+
+void showDebugMessage(const char *message)
+{
+  display->clearScreen();
+  display->setCursor(2, 5);
+  display->print(message);
+}
+
+void drawDepartures(const Departure departures[DEPARTURE_COUNT], int departureCount)
+{
+  const uint16_t BVGColor = MatrixPanel_I2S_DMA::color565(254, 163, 1);
+
+  display->clearScreen();
+  display->setTextColor(BVGColor);
+
+  for (int index = 0; index < departureCount; ++index) {
+    const int16_t y = 6 + index * 7;
+    const String mins = String(departures[index].mins);
+    const int16_t minsX = mins.length() == 1 ? 120 : 114;
+
+    String direction = normalizeText(departures[index].direction);
+    direction = fitToWidth(direction, minsX - 28);
+
+    display->setCursor(2, y);
+    display->print(departures[index].line);
+
+    display->setCursor(26, y);
+    display->print(direction);
+
+    display->setCursor(minsX, y);
+    display->print(mins);
+  }
+}
 
 void setup()
 {
@@ -23,12 +89,10 @@ void setup()
 
   Serial.print("Connecting to WiFi");
 
-  for (int attempt = 0;
-       attempt < 40 && WiFi.status() != WL_CONNECTED;
-       ++attempt) {
+  for (int attempt = 0; attempt < 40 && WiFi.status() != WL_CONNECTED; ++attempt) {
     delay(500);
     Serial.print(".");
-       }
+  }
 
   Serial.println();
 
@@ -67,33 +131,40 @@ void setup()
 
   uint16_t BVGColor = MatrixPanel_I2S_DMA::color565(254, 163, 1);
 
-  display->setBrightness8(100);
+  display->setBrightness8(50);
   display->clearScreen();
+  display->setTextWrap(false);
+  display->setFont(&Font3x5);
   display->setTextSize(1);
 
   display->setTextColor(BVGColor);
-  display->setCursor(4, 4);
-  display->print("Waiting for api!");
-
+  display->setCursor(2, 6);
+  display->print("WAITING FOR API");
 
   Serial.println("Display initialized successfully.");
 }
 
-String currentMessage;
-
 void loop()
 {
-  String newMessage;
+  Departure departures[DEPARTURE_COUNT];
+  int departureCount = fetchDepartures(departures);
 
-  if (fetchMessage(newMessage) && newMessage != currentMessage) {
-    currentMessage = newMessage;
-
-    Serial.print("Updating display text to: ");
-    Serial.println(currentMessage);
-
-    display->clearScreen();
-    display->setCursor(2, 2);
-    display->print(currentMessage);
+  switch (departureCount) {
+    case 0:
+      showDebugMessage("NO DEPARTURES");
+      break;
+    case NO_API_CONNECTION:
+      showDebugMessage("NO API CONNECTION");
+      break;
+    case EXTERNAL_API_FAILED:
+      showDebugMessage("EXTERNAL API FAILED");
+      break;
+    case API_ERROR:
+      showDebugMessage("API ERROR");
+      break;
+    default:
+      drawDepartures(departures, departureCount);
+      break;
   }
 
   delay(5000);
