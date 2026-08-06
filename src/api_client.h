@@ -2,9 +2,8 @@
 #include <Arduino.h>
 
 constexpr int DEPARTURE_COUNT = 3;
-constexpr int NO_API_CONNECTION = -1;
-constexpr int EXTERNAL_API_FAILED = -2;
-constexpr int API_ERROR = -3;
+constexpr int API_ERROR = -1;
+constexpr int NO_WIFI_CONNECTION = -2;
 
 struct Departure {
     String line;

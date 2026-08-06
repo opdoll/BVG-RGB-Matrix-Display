@@ -1,22 +1,44 @@
 #include <ArduinoJson.h>
-#include <WiFiClient.h>
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+#include <time.h>
 
 #include "api_client.h"
-#include "secrets.h"
+
+constexpr char API_URL[] = "https://v6.vbb.transport.rest/stops/900086107/departures?results=3&duration=60&remarks=false&linesOfStops=false&pretty=false";
+
+bool minutesUntil(const char *timestamp, int &minutes) {
+
+    tm departureTime = {};
+    departureTime.tm_isdst = -1;
+
+    if (strptime(timestamp, "%Y-%m-%dT%H:%M:%S", &departureTime) == nullptr) {
+        return false;
+    }
+
+    const time_t departure = mktime(&departureTime);
+    const time_t now = time(nullptr);
+
+    const long seconds = departure - now;
+    minutes = seconds <= 0 ? 0 : static_cast<int>((seconds + 59) / 60);
+    return true;
+}
 
 int fetchDepartures(Departure departures[DEPARTURE_COUNT]) {
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("API request skipped: WiFi is disconnected");
-        return NO_API_CONNECTION;
+        return NO_WIFI_CONNECTION;
     }
 
-    WiFiClient client;
+    WiFiClientSecure client;
+    client.setInsecure();
+
     HTTPClient http;
+    http.setTimeout(10000);
 
     if (!http.begin(client, API_URL)) {
         Serial.println("API request failed: invalid URL");
-        return NO_API_CONNECTION;
+        return API_ERROR;
     }
 
     int status = http.GET();
@@ -24,31 +46,54 @@ int fetchDepartures(Departure departures[DEPARTURE_COUNT]) {
     if (status < 0) {
         Serial.printf("API request failed: HTTP %d (%s)\n", status, HTTPClient::errorToString(status).c_str());
         http.end();
-        return NO_API_CONNECTION;
+        return API_ERROR;
     }
 
     if (status != HTTP_CODE_OK) {
         Serial.printf("API returned HTTP %d\n", status);
         http.end();
-        return status == 502 ? EXTERNAL_API_FAILED : API_ERROR;
+        return API_ERROR;
     }
 
     String response = http.getString();
     http.end();
 
+    JsonDocument filter;
+    filter["departures"][0]["line"]["name"] = true;
+    filter["departures"][0]["direction"] = true;
+    filter["departures"][0]["when"] = true;
+    filter["departures"][0]["plannedWhen"] = true;
+
     JsonDocument document;
-    if (deserializeJson(document, response)) {
-        Serial.println("API returned invalid JSON");
+    DeserializationError error = deserializeJson(document, response, DeserializationOption::Filter(filter));
+    if (error) {
+        Serial.printf("API returned invalid JSON: %s\n", error.c_str());
         return API_ERROR;
     }
 
     JsonArray items = document["departures"].as<JsonArray>();
-    int departureCount = min(static_cast<int>(items.size()), DEPARTURE_COUNT);
+    int departureCount = 0;
 
-    for (int index = 0; index < departureCount; ++index) {
-        departures[index].line = items[index]["line"].as<String>();
-        departures[index].direction = items[index]["direction"].as<String>();
-        departures[index].mins = items[index]["mins"].as<int>();
+    for (JsonObject item : items) {
+        if (departureCount >= DEPARTURE_COUNT) {
+            break;
+        }
+
+        const char *timestamp = item["when"];
+        if (timestamp == nullptr) {
+            timestamp = item["plannedWhen"];
+        }
+
+        int minutes;
+        if (!minutesUntil(timestamp, minutes)) {
+            Serial.println("API returned an invalid departure time");
+            continue;
+        }
+
+        departures[departureCount].line = item["line"]["name"].as<String>();
+        departures[departureCount].direction = item["direction"].as<String>();
+        departures[departureCount].mins = minutes;
+        ++departureCount;
     }
 
     return departureCount;

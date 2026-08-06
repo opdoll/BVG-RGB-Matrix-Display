@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
 #include <WiFi.h>
+#include <time.h>
 
 #include "api_client.h"
 #include "font_3x5.h"
@@ -99,6 +100,19 @@ void setup()
   if (WiFi.status() == WL_CONNECTED) {
     Serial.print("WiFi connected. IP address: ");
     Serial.println(WiFi.localIP());
+
+    configTzTime(
+      "CET-1CEST,M3.5.0,M10.5.0/3",
+      "pool.ntp.org",
+      "time.nist.gov"
+    );
+
+    tm timeInfo;
+    if (getLocalTime(&timeInfo, 10000)) {
+      Serial.println("Time synchronized");
+    } else {
+      Serial.println("Time synchronization failed");
+    }
   } else {
     Serial.println("WiFi connection failed");
   }
@@ -153,11 +167,8 @@ void loop()
     case 0:
       showDebugMessage("NO DEPARTURES");
       break;
-    case NO_API_CONNECTION:
-      showDebugMessage("NO API CONNECTION");
-      break;
-    case EXTERNAL_API_FAILED:
-      showDebugMessage("EXTERNAL API FAILED");
+    case NO_WIFI_CONNECTION:
+      showDebugMessage("NO WIFI CONNECTION");
       break;
     case API_ERROR:
       showDebugMessage("API ERROR");
