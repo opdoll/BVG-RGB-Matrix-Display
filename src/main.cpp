@@ -133,6 +133,7 @@ void setup()
   );
 
   mxconfig.driver = HUB75_I2S_CFG::SHIFTREG;
+  mxconfig.clkphase = false;
 
   display = new MatrixPanel_I2S_DMA(mxconfig);
 
