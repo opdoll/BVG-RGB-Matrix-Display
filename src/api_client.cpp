@@ -5,7 +5,13 @@
 
 #include "api_client.h"
 
-constexpr char API_URL[] = "https://v6.vbb.transport.rest/stops/900086107/departures?results=3&duration=60&remarks=false&linesOfStops=false&pretty=false";
+constexpr char API_URL[] = "https://v6.vbb.transport.rest/stops/900086107/departures?results=20&duration=60&remarks=false&linesOfStops=false&pretty=false";
+
+bool wantedDirection(const String &line, const String &direction) {
+    return
+        (line == "221" && (direction == "U Kurt-Schumacher-Platz" || direction == "U Leopoldplatz")) ||
+        (line == "125" && (direction == "U Kurt-Schumacher-Platz" || direction == "U Osloer Str."));
+}
 
 bool minutesUntil(const char *timestamp, int &minutes) {
 
@@ -79,6 +85,12 @@ int fetchDepartures(Departure departures[DEPARTURE_COUNT]) {
             break;
         }
 
+        String line = item["line"]["name"].as<String>();
+        String direction = item["direction"].as<String>();
+        if (!wantedDirection(line, direction)) {
+            continue;
+        }
+
         const char *timestamp = item["when"];
         if (timestamp == nullptr) {
             timestamp = item["plannedWhen"];
@@ -90,8 +102,8 @@ int fetchDepartures(Departure departures[DEPARTURE_COUNT]) {
             continue;
         }
 
-        departures[departureCount].line = item["line"]["name"].as<String>();
-        departures[departureCount].direction = item["direction"].as<String>();
+        departures[departureCount].line = line;
+        departures[departureCount].direction = direction;
         departures[departureCount].mins = minutes;
         ++departureCount;
     }
