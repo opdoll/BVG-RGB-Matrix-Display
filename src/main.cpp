@@ -59,10 +59,22 @@ void drawDepartures(const Departure departures[DEPARTURE_COUNT], int departureCo
   display->clearScreen();
   display->setTextColor(BVGColor);
 
+  const String departureTitle = "ABFAHRT";
+  const int16_t departureTitleX = PANEL_RES_X * PANEL_CHAIN - 2 - textWidth(departureTitle);
+
+  display->setCursor(2, 6);
+  display->print("LINIE");
+
+  display->setCursor(26, 6);
+  display->print("RICHTUNG");
+
+  display->setCursor(departureTitleX, 6);
+  display->print(departureTitle);
+
   for (int index = 0; index < departureCount; ++index) {
-    const int16_t y = 6 + index * 7;
+    const int16_t y = 15 + index * 7;
     const String mins = String(departures[index].mins);
-    const int16_t minsX = mins.length() == 1 ? 120 : 114;
+    const int16_t minsX = PANEL_RES_X * PANEL_CHAIN - 2 - textWidth(mins);
 
     String direction = normalizeText(departures[index].direction);
     direction = fitToWidth(direction, minsX - 28);
