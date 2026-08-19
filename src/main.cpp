@@ -110,6 +110,7 @@ void setup()
   wifiManager.setAPCallback(configModeCallback);
   wifiManager.setConnectTimeout(20);
   wifiManager.setWiFiAutoReconnect(true);
+  wifiManager.setShowDnsFields(true);
 
   if (!wifiManager.autoConnect(WIFI_CONFIG_AP_NAME)) {
     Serial.println("WiFi setup failed. Restarting.");
