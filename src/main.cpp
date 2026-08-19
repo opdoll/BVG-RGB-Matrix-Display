@@ -1,17 +1,27 @@
 #include <Arduino.h>
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
 #include <WiFi.h>
+#include <WiFiManager.h>
 #include <time.h>
 
 #include "api_client.h"
 #include "font_3x5.h"
-#include "secrets.h"
 
 #define PANEL_RES_X 64
 #define PANEL_RES_Y 32
 #define PANEL_CHAIN 2
 
+constexpr char WIFI_CONFIG_AP_NAME[] = "BVG-Display-Setup";
+
 MatrixPanel_I2S_DMA *display = nullptr;
+
+void configModeCallback(WiFiManager *wifiManager)
+{
+  Serial.println("Wifi connection failed. Configuration portal started at ");
+  Serial.print(wifiManager->getConfigPortalSSID());
+  Serial.print(" and the address: http://");
+  Serial.println(WiFi.softAPIP());
+}
 
 uint16_t textWidth(const String &text)
 {
@@ -96,37 +106,31 @@ void setup()
   Serial.begin(115200);
 
   // wifi setup
-  WiFi.mode(WIFI_STA);
-  WiFi.setAutoReconnect(true);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFiManager wifiManager;
+  wifiManager.setAPCallback(configModeCallback);
+  wifiManager.setConnectTimeout(20);
+  wifiManager.setWiFiAutoReconnect(true);
 
-  Serial.print("Connecting to WiFi");
-
-  for (int attempt = 0; attempt < 40 && WiFi.status() != WL_CONNECTED; ++attempt) {
-    delay(500);
-    Serial.print(".");
+  if (!wifiManager.autoConnect(WIFI_CONFIG_AP_NAME)) {
+    Serial.println("WiFi setup failed. Restarting.");
+    delay(3000);
+    ESP.restart();
   }
 
-  Serial.println();
+  Serial.print("WiFi connected. IP address: ");
+  Serial.println(WiFi.localIP());
 
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.print("WiFi connected. IP address: ");
-    Serial.println(WiFi.localIP());
+  configTzTime(
+    "CET-1CEST,M3.5.0,M10.5.0/3",
+    "pool.ntp.org",
+    "time.nist.gov"
+  );
 
-    configTzTime(
-      "CET-1CEST,M3.5.0,M10.5.0/3",
-      "pool.ntp.org",
-      "time.nist.gov"
-    );
-
-    tm timeInfo;
-    if (getLocalTime(&timeInfo, 10000)) {
-      Serial.println("Time synchronized");
-    } else {
-      Serial.println("Time synchronization failed");
-    }
+  tm timeInfo;
+  if (getLocalTime(&timeInfo, 10000)) {
+    Serial.println("Time synchronized");
   } else {
-    Serial.println("WiFi connection failed");
+    Serial.println("Time synchronization failed");
   }
 
   // adapt to pin layout of rgb matrix
