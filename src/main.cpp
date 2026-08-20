@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
+#include <Preferences.h>
 #include <WiFi.h>
 #include <WiFiManager.h>
 #include <time.h>
@@ -12,8 +13,45 @@
 #define PANEL_CHAIN 2
 
 constexpr char WIFI_CONFIG_AP_NAME[] = "BVG-Display-Setup";
+constexpr char DEFAULT_API_BASE_URL[] = "https://v6.vbb.transport.rest/stops/";
+constexpr char DEFAULT_STOP_ID[] = "900086107";
+constexpr char DEFAULT_LINES[] = "221,125";
+constexpr char DEFAULT_DIRECTIONS[] = "U Kurt-Schumacher-Platz,U Leopoldplatz,U Osloer Str.";
+constexpr unsigned long DEPARTURE_UPDATE_INTERVAL = 20000;
 
 MatrixPanel_I2S_DMA *display = nullptr;
+WiFiManager wifiManager;
+WiFiManagerParameter stopIdParameter("stopId", "Stop ID", DEFAULT_STOP_ID, 256);
+WiFiManagerParameter lineParameter("line", "Lines, comma-separated (empty for all)", DEFAULT_LINES, 256);
+WiFiManagerParameter directionParameter("direction", "Directions, comma-separated (empty for all)", DEFAULT_DIRECTIONS, 256);
+WiFiManagerParameter apiEndpointParameter("apiEndpoint", "Advanced: API endpoint", DEFAULT_API_BASE_URL, 256);
+
+void saveDisplayConfig()
+{
+  Preferences preferences;
+  preferences.begin("display", false);
+  preferences.putString("stopId", stopIdParameter.getValue());
+  preferences.putString("line", lineParameter.getValue());
+  preferences.putString("direction", directionParameter.getValue());
+  preferences.putString("apiEndpoint", apiEndpointParameter.getValue());
+  preferences.end();
+}
+
+void loadDisplayConfig()
+{
+  Preferences preferences;
+  preferences.begin("display", false);
+  String stopId = preferences.getString("stopId", DEFAULT_STOP_ID);
+  String line = preferences.getString("line", DEFAULT_LINES);
+  String direction = preferences.getString("direction", DEFAULT_DIRECTIONS);
+  String apiEndpoint = preferences.getString("apiEndpoint", DEFAULT_API_BASE_URL);
+  preferences.end();
+
+  stopIdParameter.setValue(stopId.c_str(), 256);
+  lineParameter.setValue(line.c_str(), 256);
+  directionParameter.setValue(direction.c_str(), 256);
+  apiEndpointParameter.setValue(apiEndpoint.c_str(), 256);
+}
 
 void configModeCallback(WiFiManager *wifiManager)
 {
@@ -21,6 +59,15 @@ void configModeCallback(WiFiManager *wifiManager)
   Serial.print(wifiManager->getConfigPortalSSID());
   Serial.print(" and the address: http://");
   Serial.println(WiFi.softAPIP());
+}
+
+void wait()
+{
+  unsigned long startedAt = millis();
+  while (millis() - startedAt < DEPARTURE_UPDATE_INTERVAL) {
+    wifiManager.process();
+    delay(10);
+  }
 }
 
 uint16_t textWidth(const String &text)
@@ -106,7 +153,13 @@ void setup()
   Serial.begin(115200);
 
   // wifi setup
-  WiFiManager wifiManager;
+  loadDisplayConfig();
+  wifiManager.addParameter(&stopIdParameter);
+  wifiManager.addParameter(&lineParameter);
+  wifiManager.addParameter(&directionParameter);
+  wifiManager.addParameter(&apiEndpointParameter);
+  wifiManager.setParamsPage(true);
+  wifiManager.setSaveParamsCallback(saveDisplayConfig);
   wifiManager.setAPCallback(configModeCallback);
   wifiManager.setConnectTimeout(20);
   wifiManager.setWiFiAutoReconnect(true);
@@ -119,6 +172,10 @@ void setup()
   }
 
   Serial.print("WiFi connected. IP address: ");
+  Serial.println(WiFi.localIP());
+
+  wifiManager.startWebPortal();
+  Serial.print("Config portal: http://");
   Serial.println(WiFi.localIP());
 
   configTzTime(
@@ -179,7 +236,7 @@ void setup()
 void loop()
 {
   Departure departures[DEPARTURE_COUNT];
-  int departureCount = fetchDepartures(departures);
+  int departureCount = fetchDepartures(departures, apiEndpointParameter.getValue(), stopIdParameter.getValue(), lineParameter.getValue(), directionParameter.getValue());
 
   switch (departureCount) {
     case 0:
@@ -196,5 +253,5 @@ void loop()
       break;
   }
 
-  delay(5000);
+  wait();
 }

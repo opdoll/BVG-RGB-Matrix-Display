@@ -5,12 +5,27 @@
 
 #include "api_client.h"
 
-constexpr char API_URL[] = "https://v6.vbb.transport.rest/stops/900086107/departures?results=20&duration=60&remarks=false&linesOfStops=false&pretty=false";
+constexpr char API_DEPARTURES_QUERY[] = "/departures?results=20&duration=60&remarks=false&linesOfStops=false&pretty=false";
 
-bool wantedDirection(const String &line, const String &direction) {
-    return
-        (line == "221" && (direction == "U Kurt-Schumacher-Platz" || direction == "U Leopoldplatz")) ||
-        (line == "125" && (direction == "U Kurt-Schumacher-Platz" || direction == "U Osloer Str."));
+static WiFiClientSecure client;
+static HTTPClient http;
+static bool clientReady = false;
+
+void prepareClient() {
+    if (clientReady) {
+        return;
+    }
+
+    client.setInsecure();
+    client.setHandshakeTimeout(10);
+    http.setReuse(true);
+    http.setTimeout(15000);
+    clientReady = true;
+}
+
+bool matchesFilter(const String &value, const String &filter) {
+    String list = "," + filter + ",";
+    return filter.isEmpty() || list.indexOf("," + value + ",") >= 0;
 }
 
 bool minutesUntil(const char *timestamp, int &minutes) {
@@ -30,19 +45,16 @@ bool minutesUntil(const char *timestamp, int &minutes) {
     return true;
 }
 
-int fetchDepartures(Departure departures[DEPARTURE_COUNT]) {
+int fetchDepartures(Departure departures[DEPARTURE_COUNT], const String &apiBaseUrl, const String &stopId, const String &wantedLines, const String &wantedDirections) {
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("API request skipped: WiFi is disconnected");
         return NO_WIFI_CONNECTION;
     }
 
-    WiFiClientSecure client;
-    client.setInsecure();
+    prepareClient();
 
-    HTTPClient http;
-    http.setTimeout(10000);
-
-    if (!http.begin(client, API_URL)) {
+    String departuresUrl = apiBaseUrl + stopId + API_DEPARTURES_QUERY;
+    if (!http.begin(client, departuresUrl)) {
         Serial.println("API request failed: invalid URL");
         return API_ERROR;
     }
@@ -52,12 +64,14 @@ int fetchDepartures(Departure departures[DEPARTURE_COUNT]) {
     if (status < 0) {
         Serial.printf("API request failed: HTTP %d (%s)\n", status, HTTPClient::errorToString(status).c_str());
         http.end();
+        client.stop();
         return API_ERROR;
     }
 
     if (status != HTTP_CODE_OK) {
         Serial.printf("API returned HTTP %d\n", status);
         http.end();
+        client.stop();
         return API_ERROR;
     }
 
@@ -74,6 +88,7 @@ int fetchDepartures(Departure departures[DEPARTURE_COUNT]) {
     DeserializationError error = deserializeJson(document, response, DeserializationOption::Filter(filter));
     if (error) {
         Serial.printf("API returned invalid JSON: %s\n", error.c_str());
+        client.stop();
         return API_ERROR;
     }
 
@@ -87,7 +102,7 @@ int fetchDepartures(Departure departures[DEPARTURE_COUNT]) {
 
         String line = item["line"]["name"].as<String>();
         String direction = item["direction"].as<String>();
-        if (!wantedDirection(line, direction)) {
+        if (!matchesFilter(line, wantedLines) || !matchesFilter(direction, wantedDirections)) {
             continue;
         }
 

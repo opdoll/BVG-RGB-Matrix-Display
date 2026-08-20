@@ -11,4 +11,4 @@ struct Departure {
     int mins;
 };
 
-int fetchDepartures(Departure departures[DEPARTURE_COUNT]);
+int fetchDepartures(Departure departures[DEPARTURE_COUNT], const String &apiBaseUrl, const String &stopId, const String &wantedLines, const String &wantedDirections);
