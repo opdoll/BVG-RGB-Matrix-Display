@@ -53,12 +53,16 @@ void loadDisplayConfig()
   apiEndpointParameter.setValue(apiEndpoint.c_str(), 256);
 }
 
+void showInfoMessage(const char *message);
+
 void configModeCallback(WiFiManager *wifiManager)
 {
   Serial.println("Wifi connection failed. Configuration portal started at ");
   Serial.print(wifiManager->getConfigPortalSSID());
   Serial.print(" and the address: http://");
   Serial.println(WiFi.softAPIP());
+
+  showInfoMessage("WIFI NOT FOUND");
 }
 
 void wait()
@@ -102,7 +106,7 @@ String normalizeText(String text) // use replacement chars for now
   return text;
 }
 
-void showDebugMessage(const char *message)
+void showInfoMessage(const char *message)
 {
   display->clearScreen();
   display->setCursor(2, 5);
@@ -152,45 +156,6 @@ void setup()
   delay(1000);
   Serial.begin(115200);
 
-  // wifi setup
-  loadDisplayConfig();
-  wifiManager.addParameter(&stopIdParameter);
-  wifiManager.addParameter(&lineParameter);
-  wifiManager.addParameter(&directionParameter);
-  wifiManager.addParameter(&apiEndpointParameter);
-  wifiManager.setParamsPage(true);
-  wifiManager.setSaveParamsCallback(saveDisplayConfig);
-  wifiManager.setAPCallback(configModeCallback);
-  wifiManager.setConnectTimeout(20);
-  wifiManager.setWiFiAutoReconnect(true);
-  wifiManager.setShowDnsFields(true);
-
-  if (!wifiManager.autoConnect(WIFI_CONFIG_AP_NAME)) {
-    Serial.println("WiFi setup failed. Restarting.");
-    delay(3000);
-    ESP.restart();
-  }
-
-  Serial.print("WiFi connected. IP address: ");
-  Serial.println(WiFi.localIP());
-
-  wifiManager.startWebPortal();
-  Serial.print("Config portal: http://");
-  Serial.println(WiFi.localIP());
-
-  configTzTime(
-    "CET-1CEST,M3.5.0,M10.5.0/3",
-    "pool.ntp.org",
-    "time.nist.gov"
-  );
-
-  tm timeInfo;
-  if (getLocalTime(&timeInfo, 10000)) {
-    Serial.println("Time synchronized");
-  } else {
-    Serial.println("Time synchronization failed");
-  }
-
   // adapt to pin layout of rgb matrix
   HUB75_I2S_CFG::i2s_pins pins = {
     4, 6, 5,
@@ -225,12 +190,56 @@ void setup()
   display->setTextWrap(false);
   display->setFont(&Font3x5);
   display->setTextSize(1);
-
   display->setTextColor(BVGColor);
-  display->setCursor(2, 6);
-  display->print("WAITING FOR API");
 
   Serial.println("Display initialized successfully.");
+
+  // wifi setup
+  loadDisplayConfig();
+  wifiManager.addParameter(&stopIdParameter);
+  wifiManager.addParameter(&lineParameter);
+  wifiManager.addParameter(&directionParameter);
+  wifiManager.addParameter(&apiEndpointParameter);
+  wifiManager.setParamsPage(true);
+  wifiManager.setSaveParamsCallback(saveDisplayConfig);
+  wifiManager.setAPCallback(configModeCallback);
+  wifiManager.setConnectTimeout(20);
+  wifiManager.setWiFiAutoReconnect(true);
+  wifiManager.setShowDnsFields(true);
+
+  showInfoMessage("CONNECTING WIFI");
+
+  if (!wifiManager.autoConnect(WIFI_CONFIG_AP_NAME)) {
+    Serial.println("WiFi setup failed. Restarting.");
+    showInfoMessage("WIFI SETUP FAILED");
+    delay(3000);
+    ESP.restart();
+  }
+
+  Serial.print("WiFi connected. IP address: ");
+  Serial.println(WiFi.localIP());
+
+  showInfoMessage(("IP: " + WiFi.localIP().toString()).c_str());
+  delay(5000);
+
+  wifiManager.startWebPortal();
+  Serial.print("Config portal: http://");
+  Serial.println(WiFi.localIP());
+
+  configTzTime(
+    "CET-1CEST,M3.5.0,M10.5.0/3",
+    "pool.ntp.org",
+    "time.nist.gov"
+  );
+
+  tm timeInfo;
+  if (getLocalTime(&timeInfo, 10000)) {
+    Serial.println("Time synchronized");
+  } else {
+    Serial.println("Time synchronization failed");
+  }
+
+  showInfoMessage("WAITING FOR API");
 }
 
 void loop()
@@ -240,13 +249,13 @@ void loop()
 
   switch (departureCount) {
     case 0:
-      showDebugMessage("NO DEPARTURES");
+      showInfoMessage("NO DEPARTURES");
       break;
     case NO_WIFI_CONNECTION:
-      showDebugMessage("NO WIFI CONNECTION");
+      showInfoMessage("NO WIFI CONNECTION");
       break;
     case API_ERROR:
-      showDebugMessage("API ERROR");
+      showInfoMessage("API ERROR");
       break;
     default:
       drawDepartures(departures, departureCount);
