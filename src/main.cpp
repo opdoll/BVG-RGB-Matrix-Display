@@ -17,6 +17,7 @@ constexpr char DEFAULT_API_BASE_URL[] = "https://v6.vbb.transport.rest/stops/";
 constexpr char DEFAULT_STOP_ID[] = "900086107";
 constexpr char DEFAULT_LINES[] = "221,125";
 constexpr char DEFAULT_DIRECTIONS[] = "U Kurt-Schumacher-Platz,U Leopoldplatz,U Osloer Str.";
+constexpr char DEFAULT_BRIGHTNESS[] = "50";
 constexpr unsigned long DEPARTURE_UPDATE_INTERVAL = 20000;
 
 MatrixPanel_I2S_DMA *display = nullptr;
@@ -25,6 +26,15 @@ WiFiManagerParameter stopIdParameter("stopId", "Stop ID", DEFAULT_STOP_ID, 256);
 WiFiManagerParameter lineParameter("line", "Lines, comma-separated (empty for all)", DEFAULT_LINES, 256);
 WiFiManagerParameter directionParameter("direction", "Directions, comma-separated (empty for all)", DEFAULT_DIRECTIONS, 256);
 WiFiManagerParameter apiEndpointParameter("apiEndpoint", "Advanced: API endpoint", DEFAULT_API_BASE_URL, 256);
+WiFiManagerParameter brightnessParameter("brightness", "Brightness (1-255)", DEFAULT_BRIGHTNESS, 4, "type=\"number\" min=\"1\" max=\"255\"");
+
+uint8_t getBrightnessValue()
+{
+  int brightness = atoi(brightnessParameter.getValue());
+  if (brightness < 1) brightness = 1;
+  if (brightness > 255) brightness = 255;
+  return static_cast<uint8_t>(brightness);
+}
 
 void saveDisplayConfig()
 {
@@ -34,7 +44,12 @@ void saveDisplayConfig()
   preferences.putString("line", lineParameter.getValue());
   preferences.putString("direction", directionParameter.getValue());
   preferences.putString("apiEndpoint", apiEndpointParameter.getValue());
+  preferences.putString("brightness", brightnessParameter.getValue());
   preferences.end();
+
+  if (display != nullptr) {
+    display->setBrightness8(getBrightnessValue());
+  }
 }
 
 void loadDisplayConfig()
@@ -45,12 +60,14 @@ void loadDisplayConfig()
   String line = preferences.getString("line", DEFAULT_LINES);
   String direction = preferences.getString("direction", DEFAULT_DIRECTIONS);
   String apiEndpoint = preferences.getString("apiEndpoint", DEFAULT_API_BASE_URL);
+  String brightness = preferences.getString("brightness", DEFAULT_BRIGHTNESS);
   preferences.end();
 
   stopIdParameter.setValue(stopId.c_str(), 256);
   lineParameter.setValue(line.c_str(), 256);
   directionParameter.setValue(direction.c_str(), 256);
   apiEndpointParameter.setValue(apiEndpoint.c_str(), 256);
+  brightnessParameter.setValue(brightness.c_str(), 4);
 }
 
 void showInfoMessage(const char *message);
@@ -156,6 +173,8 @@ void setup()
   delay(1000);
   Serial.begin(115200);
 
+  loadDisplayConfig();
+
   // adapt to pin layout of rgb matrix
   HUB75_I2S_CFG::i2s_pins pins = {
     4, 6, 5,
@@ -185,7 +204,7 @@ void setup()
 
   uint16_t BVGColor = MatrixPanel_I2S_DMA::color565(254, 163, 1);
 
-  display->setBrightness8(50);
+  display->setBrightness8(getBrightnessValue());
   display->clearScreen();
   display->setTextWrap(false);
   display->setFont(&Font3x5);
@@ -195,11 +214,11 @@ void setup()
   Serial.println("Display initialized successfully.");
 
   // wifi setup
-  loadDisplayConfig();
   wifiManager.addParameter(&stopIdParameter);
   wifiManager.addParameter(&lineParameter);
   wifiManager.addParameter(&directionParameter);
   wifiManager.addParameter(&apiEndpointParameter);
+  wifiManager.addParameter(&brightnessParameter);
   wifiManager.setParamsPage(true);
   wifiManager.setSaveParamsCallback(saveDisplayConfig);
   wifiManager.setAPCallback(configModeCallback);
