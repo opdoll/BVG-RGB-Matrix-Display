@@ -239,7 +239,7 @@ void setup()
   Serial.println(WiFi.localIP());
 
   showInfoMessage(("IP: " + WiFi.localIP().toString()).c_str());
-  delay(5000);
+  delay(2000);
 
   wifiManager.startWebPortal();
   Serial.print("Config portal: http://");
